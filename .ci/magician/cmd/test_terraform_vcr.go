@@ -85,10 +85,9 @@ type VCRTestTableRow struct {
 	ReplayingAfterRecordingLogUrl   string
 	// NightlyStatus is set for tests that failed in recording when nightly history is available.
 	NightlyStatus string
-	// NightlyEvidence summarizes the nightly runs backing NightlyStatus, e.g. "2/30 failed, last 2026-09-28".
+	// NightlyEvidence summarizes the nightly runs backing NightlyStatus, linking each recent
+	// failure to its debug log.
 	NightlyEvidence string
-	// NightlyLogUrl links to the debug log of the test's most recent nightly failure.
-	NightlyLogUrl string
 }
 
 type recordReplay struct {
@@ -872,9 +871,6 @@ func buildVCRTestRows(replayingResult, recordingResult, replayingAfterRecordingR
 		if nightlyHistory != nil {
 			row.NightlyStatus = classifyNightlyStatus(t, nightlyHistory)
 			row.NightlyEvidence = nightlyEvidence(t, nightlyHistory)
-			if h := lookupNightlyHistory(t, nightlyHistory); h != nil {
-				row.NightlyLogUrl = h.LastFailureLogLink
-			}
 		}
 		testRows = append(testRows, row)
 	}

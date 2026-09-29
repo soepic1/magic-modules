@@ -114,10 +114,55 @@ func TestBuildVCRTestRowsNightlyStatus(t *testing.T) {
 	}
 }
 
+func TestNightlyEvidence(t *testing.T) {
+	history := map[string]*NightlyTestHistory{
+		"TestAccLinked": {
+			Passes:   28,
+			Failures: 2,
+			FailureRuns: []NightlyTestRun{
+				{Date: "2026-09-27", LogLink: "https://logs/1.txt"},
+				{Date: "2026-09-28", LogLink: "https://logs/2.txt"},
+			},
+		},
+		"TestAccTruncated": {
+			Passes:      2,
+			Failures:    28,
+			FailureRuns: []NightlyTestRun{{Date: "2026-09-28", LogLink: "https://logs/3.txt"}},
+		},
+		"TestAccNoLink": {
+			Passes:      29,
+			Failures:    1,
+			FailureRuns: []NightlyTestRun{{Date: "2026-09-28"}},
+		},
+		"TestAccClean":  {Passes: 30},
+		"TestAccNoRuns": {},
+		"TestAccParent": {
+			Passes:      29,
+			Failures:    1,
+			FailureRuns: []NightlyTestRun{{Date: "2026-09-28", LogLink: "https://logs/4.txt"}},
+		},
+	}
+
+	cases := map[string]string{
+		"TestAccLinked":       "2/30 failed: [2026-09-27](https://logs/1.txt), [2026-09-28](https://logs/2.txt)",
+		"TestAccTruncated":    "28/30 failed, latest 1: [2026-09-28](https://logs/3.txt)",
+		"TestAccNoLink":       "1/30 failed: 2026-09-28",
+		"TestAccClean":        "0/30 failed",
+		"TestAccNoRuns":       "",
+		"TestAccMissing":      "",
+		"TestAccParent__sub1": "1/30 failed: [2026-09-28](https://logs/4.txt)",
+	}
+	for name, want := range cases {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, want, nightlyEvidence(name, history))
+		})
+	}
+}
+
 func TestRecordReplayNightlyColumn(t *testing.T) {
 	data := recordReplay{
 		TestRows: []VCRTestTableRow{
-			{DisplayName: "TestAcc_a", RecordingStatus: "Failed", ReplayingAfterRecordingStatus: "-", NightlyStatus: NightlyStatusFailing, NightlyEvidence: "28/30 failed, last 2026-09-28", NightlyLogUrl: "https://logs/a.log"},
+			{DisplayName: "TestAcc_a", RecordingStatus: "Failed", ReplayingAfterRecordingStatus: "-", NightlyStatus: NightlyStatusFailing, NightlyEvidence: "28/30 failed, latest 2: [2026-09-27](https://logs/a1.log), [2026-09-28](https://logs/a2.log)"},
 			{DisplayName: "TestAcc_b", RecordingStatus: "Failed", ReplayingAfterRecordingStatus: "-", NightlyStatus: NightlyStatusPassing},
 		},
 		RecordingResult:       vcr.Result{FailedTests: []string{"TestAcc_a", "TestAcc_b"}},
@@ -131,7 +176,7 @@ func TestRecordReplayNightlyColumn(t *testing.T) {
 	got, err := formatRecordReplay(data, new(strings.Builder))
 	assert.NoError(t, err)
 	assert.Contains(t, got, "| Recording Mode | Replaying Rerun | Nightly | Test Name |")
-	assert.Contains(t, got, "| ❌ | - | [🔴 Failing](https://logs/a.log)<br>28/30 failed, last 2026-09-28 | TestAcc_a |")
+	assert.Contains(t, got, "| ❌ | - | 🔴 Failing<br>28/30 failed, latest 2: [2026-09-27](https://logs/a1.log), [2026-09-28](https://logs/a2.log) | TestAcc_a |")
 	assert.Contains(t, got, "| ❌ | - | 🟢 Passing | TestAcc_b |")
 	assert.Contains(t, got, "**Known Nightly Failures**: 1 of the tests")
 	assert.Contains(t, got, "[nightly test history](https://storage.cloud.google.com/nightly-test-data/nightly-test-history/beta/nightly-test-history.json)")

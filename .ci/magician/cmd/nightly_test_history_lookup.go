@@ -87,7 +87,9 @@ func classifyNightlyStatus(testName string, history map[string]*NightlyTestHisto
 	return NightlyStatusNotFound
 }
 
-// nightlyEvidence summarizes the nightly runs behind a status, e.g. "2/30 failed, last 2026-09-28".
+// nightlyEvidence summarizes the nightly runs behind a status and links each recent failure to its
+// debug log, e.g. "2/30 failed: 2026-09-27, 2026-09-28". The dates let a reviewer open the exact
+// nightly runs the status was derived from.
 func nightlyEvidence(testName string, history map[string]*NightlyTestHistory) string {
 	h := lookupNightlyHistory(testName, history)
 	if h == nil {
@@ -98,10 +100,23 @@ func nightlyEvidence(testName string, history map[string]*NightlyTestHistory) st
 		return ""
 	}
 	evidence := fmt.Sprintf("%d/%d failed", h.Failures, runs)
-	if h.LastFailureDate != "" {
-		evidence += ", last " + h.LastFailureDate
+	if len(h.FailureRuns) == 0 {
+		return evidence
 	}
-	return evidence
+
+	dates := make([]string, 0, len(h.FailureRuns))
+	for _, run := range h.FailureRuns {
+		if run.LogLink == "" {
+			dates = append(dates, run.Date)
+			continue
+		}
+		dates = append(dates, fmt.Sprintf("[%s](%s)", run.Date, run.LogLink))
+	}
+	// The history keeps only the most recent failures, so say so rather than implying it is complete.
+	if h.Failures > len(h.FailureRuns) {
+		return fmt.Sprintf("%s, latest %d: %s", evidence, len(dates), strings.Join(dates, ", "))
+	}
+	return fmt.Sprintf("%s: %s", evidence, strings.Join(dates, ", "))
 }
 
 // nightlySymbol renders a nightly status label for the PR comment table.
@@ -120,16 +135,13 @@ func nightlySymbol(status string) string {
 	}
 }
 
-// nightlyCell renders the nightly column: a status label linked to the nightly debug log when
-// available, followed by the run counts backing the status.
+// nightlyCell renders the nightly column: a status label followed by the runs backing it, each
+// failure linked to its nightly debug log so the reviewer can verify the status.
 func nightlyCell(row VCRTestTableRow) string {
 	if row.NightlyStatus == "" {
 		return ""
 	}
 	label := nightlySymbol(row.NightlyStatus)
-	if row.NightlyLogUrl != "" {
-		label = fmt.Sprintf("[%s](%s)", label, row.NightlyLogUrl)
-	}
 	if row.NightlyEvidence == "" {
 		return label
 	}
