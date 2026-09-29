@@ -33,14 +33,27 @@ import (
 // Number of days of nightly history used to determine whether a test is flakey
 const nightlyHistoryDays = 30
 
+// Maximum number of per-night failure records kept for a single test. Only the most recent are
+// retained so the history file stays small while still showing a failure pattern.
+const maxNightlyFailureRuns = 10
+
+// NightlyTestRun records a single nightly run of a test, used as evidence in PR reports.
+type NightlyTestRun struct {
+	Date    string `json:"date"`
+	LogLink string `json:"log_link,omitempty"`
+}
+
 // NightlyTestHistory aggregates a test's outcomes across a window of nightly runs.
 type NightlyTestHistory struct {
-	Service         string `json:"service"`
-	Passes          int    `json:"passes"`
-	Failures        int    `json:"failures"`
-	Skips           int    `json:"skips"`
-	LastStatus      string `json:"last_status"`
-	LastFailureDate string `json:"last_failure_date,omitempty"`
+	Service string `json:"service"`
+	// TestNameId is TeamCity's stable cross-build identifier, used to link to the test's
+	// nightly history page.
+	TestNameId  string           `json:"test_name_id,omitempty"`
+	Passes      int              `json:"passes"`
+	Failures    int              `json:"failures"`
+	Skips       int              `json:"skips"`
+	LastStatus  string           `json:"last_status"`
+	FailureRuns []NightlyTestRun `json:"failure_runs,omitempty"`
 }
 
 // NightlyTestHistoryReport is the rolling history consumed by PR CI runs to detect flakey tests.
@@ -144,11 +157,18 @@ func createNightlyTestHistory(pVersion provider.Version, tc TeamcityClient, gcs 
 				h.Passes++
 			case "FAILURE":
 				h.Failures++
-				h.LastFailureDate = day
+				h.FailureRuns = append(h.FailureRuns, NightlyTestRun{Date: day, LogLink: t.LogLink})
+				if len(h.FailureRuns) > maxNightlyFailureRuns {
+					h.FailureRuns = h.FailureRuns[len(h.FailureRuns)-maxNightlyFailureRuns:]
+				}
 			case "UNKNOWN":
 				h.Skips++
 			}
 			h.LastStatus = t.Status
+			// Days are processed oldest to newest, so this keeps the most recently seen id.
+			if t.TestNameId != "" {
+				h.TestNameId = t.TestNameId
+			}
 		}
 	}
 
