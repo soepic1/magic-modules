@@ -85,6 +85,10 @@ type VCRTestTableRow struct {
 	ReplayingAfterRecordingLogUrl   string
 	// NightlyStatus is set for tests that failed in recording when nightly history is available.
 	NightlyStatus string
+	// NightlyEvidence summarizes the nightly runs backing NightlyStatus, e.g. "2/30 failed, last 2026-09-28".
+	NightlyEvidence string
+	// NightlyLogUrl links to the debug log of the test's most recent nightly failure.
+	NightlyLogUrl string
 }
 
 type recordReplay struct {
@@ -105,6 +109,7 @@ type recordReplay struct {
 	NotRunGATests                 []string
 	HasNightlyHistory             bool
 	NightlyKnownFailures          int
+	NightlyTestHistoryUrl         string
 }
 
 var testTerraformVCRCmd = &cobra.Command{
@@ -399,6 +404,7 @@ func execTestTerraformVCR(prNumber, mmCommitSha, buildID, projectID, buildStep, 
 		recordReplayData := recordReplay{
 			HasNightlyHistory:             nightlyHistory != nil,
 			NightlyKnownFailures:          nightlyKnownFailures,
+			NightlyTestHistoryUrl:         nightlyTestHistoryUrl(provider.Beta),
 			TestRows:                      testRows,
 			RecordingResult:               expandedRecordingResult,
 			ReplayingAfterRecordingResult: expandedReplayingAfterRecordingResult,
@@ -716,7 +722,7 @@ func parseTemplate(filename string, tmplText string) *template.Template {
 		"replace":      strings.ReplaceAll,
 		"symbol":       symbol,
 		"contains":     contains,
-		"nightly":      nightlySymbol,
+		"nightly":      nightlyCell,
 	}
 	tmpl, err := template.New(filename).Funcs(funcs).Parse(tmplText)
 	if err != nil {
@@ -865,6 +871,10 @@ func buildVCRTestRows(replayingResult, recordingResult, replayingAfterRecordingR
 		row := createTableRow(t, logBaseUrl, expandedRecordingResult, expandedReplayingAfterRecordingResult)
 		if nightlyHistory != nil {
 			row.NightlyStatus = classifyNightlyStatus(t, nightlyHistory)
+			row.NightlyEvidence = nightlyEvidence(t, nightlyHistory)
+			if h := lookupNightlyHistory(t, nightlyHistory); h != nil {
+				row.NightlyLogUrl = h.LastFailureLogLink
+			}
 		}
 		testRows = append(testRows, row)
 	}

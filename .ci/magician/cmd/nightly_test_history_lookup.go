@@ -55,14 +55,24 @@ func loadNightlyTestHistory(pVersion provider.Version, gcs CloudstorageClient) (
 	return report.Tests, nil
 }
 
-// classifyNightlyStatus returns how the given test behaves in recent nightly runs.
-// The test name may be a VCR subtest name (Parent__sub); the parent test is used as a fallback.
-func classifyNightlyStatus(testName string, history map[string]*NightlyTestHistory) string {
-	h, ok := history[strings.ReplaceAll(testName, "__", "/")]
-	if !ok {
-		h, ok = history[compoundTest(testName)]
+// nightlyTestHistoryUrl links to the rolling history file backing the nightly column.
+func nightlyTestHistoryUrl(pVersion provider.Version) string {
+	return fmt.Sprintf("https://storage.cloud.google.com/%s/%s", nightlyDataBucket, nightlyTestHistoryObjectName(pVersion))
+}
+
+// lookupNightlyHistory finds the history entry for a test name. The name may be a VCR
+// subtest name (Parent__sub); the parent test is used as a fallback.
+func lookupNightlyHistory(testName string, history map[string]*NightlyTestHistory) *NightlyTestHistory {
+	if h, ok := history[strings.ReplaceAll(testName, "__", "/")]; ok {
+		return h
 	}
-	if !ok || h == nil {
+	return history[compoundTest(testName)]
+}
+
+// classifyNightlyStatus returns how the given test behaves in recent nightly runs.
+func classifyNightlyStatus(testName string, history map[string]*NightlyTestHistory) string {
+	h := lookupNightlyHistory(testName, history)
+	if h == nil {
 		return NightlyStatusNotFound
 	}
 	if h.Failures > 0 && h.LastStatus == "FAILURE" && (h.Failures >= nightlyFailingThreshold || h.Passes == 0) {
@@ -77,18 +87,51 @@ func classifyNightlyStatus(testName string, history map[string]*NightlyTestHisto
 	return NightlyStatusNotFound
 }
 
-// nightlySymbol renders a nightly status for the PR comment table.
+// nightlyEvidence summarizes the nightly runs behind a status, e.g. "2/30 failed, last 2026-09-28".
+func nightlyEvidence(testName string, history map[string]*NightlyTestHistory) string {
+	h := lookupNightlyHistory(testName, history)
+	if h == nil {
+		return ""
+	}
+	runs := h.Passes + h.Failures + h.Skips
+	if runs == 0 {
+		return ""
+	}
+	evidence := fmt.Sprintf("%d/%d failed", h.Failures, runs)
+	if h.LastFailureDate != "" {
+		evidence += ", last " + h.LastFailureDate
+	}
+	return evidence
+}
+
+// nightlySymbol renders a nightly status label for the PR comment table.
 func nightlySymbol(status string) string {
 	switch status {
 	case NightlyStatusFailing:
-		return "🔴 Failing in nightly"
+		return "🔴 Failing"
 	case NightlyStatusFlaky:
-		return "🟡 Flaky in nightly"
+		return "🟡 Flaky"
 	case NightlyStatusPassing:
-		return "🟢 Passing in nightly"
+		return "🟢 Passing"
 	case NightlyStatusNotFound:
-		return "Not run in nightly"
+		return "Not run"
 	default:
 		return "-"
 	}
+}
+
+// nightlyCell renders the nightly column: a status label linked to the nightly debug log when
+// available, followed by the run counts backing the status.
+func nightlyCell(row VCRTestTableRow) string {
+	if row.NightlyStatus == "" {
+		return ""
+	}
+	label := nightlySymbol(row.NightlyStatus)
+	if row.NightlyLogUrl != "" {
+		label = fmt.Sprintf("[%s](%s)", label, row.NightlyLogUrl)
+	}
+	if row.NightlyEvidence == "" {
+		return label
+	}
+	return fmt.Sprintf("%s<br>%s", label, row.NightlyEvidence)
 }

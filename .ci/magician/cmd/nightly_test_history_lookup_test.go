@@ -117,22 +117,24 @@ func TestBuildVCRTestRowsNightlyStatus(t *testing.T) {
 func TestRecordReplayNightlyColumn(t *testing.T) {
 	data := recordReplay{
 		TestRows: []VCRTestTableRow{
-			{DisplayName: "TestAcc_a", RecordingStatus: "Failed", ReplayingAfterRecordingStatus: "-", NightlyStatus: NightlyStatusFailing},
+			{DisplayName: "TestAcc_a", RecordingStatus: "Failed", ReplayingAfterRecordingStatus: "-", NightlyStatus: NightlyStatusFailing, NightlyEvidence: "28/30 failed, last 2026-09-28", NightlyLogUrl: "https://logs/a.log"},
 			{DisplayName: "TestAcc_b", RecordingStatus: "Failed", ReplayingAfterRecordingStatus: "-", NightlyStatus: NightlyStatusPassing},
 		},
-		RecordingResult:      vcr.Result{FailedTests: []string{"TestAcc_a", "TestAcc_b"}},
-		HasNightlyHistory:    true,
-		NightlyKnownFailures: 1,
-		Version:              provider.Beta.String(),
-		Head:                 "auto-pr-123",
-		LogBucket:            "ci-vcr-logs",
+		RecordingResult:       vcr.Result{FailedTests: []string{"TestAcc_a", "TestAcc_b"}},
+		HasNightlyHistory:     true,
+		NightlyKnownFailures:  1,
+		NightlyTestHistoryUrl: nightlyTestHistoryUrl(provider.Beta),
+		Version:               provider.Beta.String(),
+		Head:                  "auto-pr-123",
+		LogBucket:             "ci-vcr-logs",
 	}
 	got, err := formatRecordReplay(data, new(strings.Builder))
 	assert.NoError(t, err)
 	assert.Contains(t, got, "| Recording Mode | Replaying Rerun | Nightly | Test Name |")
-	assert.Contains(t, got, "| ❌ | - | 🔴 Failing in nightly | TestAcc_a |")
-	assert.Contains(t, got, "| ❌ | - | 🟢 Passing in nightly | TestAcc_b |")
+	assert.Contains(t, got, "| ❌ | - | [🔴 Failing](https://logs/a.log)<br>28/30 failed, last 2026-09-28 | TestAcc_a |")
+	assert.Contains(t, got, "| ❌ | - | 🟢 Passing | TestAcc_b |")
 	assert.Contains(t, got, "**Known Nightly Failures**: 1 of the tests")
+	assert.Contains(t, got, "[nightly test history](https://storage.cloud.google.com/nightly-test-data/nightly-test-history/beta/nightly-test-history.json)")
 
 	data.HasNightlyHistory = false
 	data.NightlyKnownFailures = 0
