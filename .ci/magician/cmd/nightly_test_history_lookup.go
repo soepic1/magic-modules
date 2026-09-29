@@ -60,6 +60,17 @@ func nightlyTestHistoryUrl(pVersion provider.Version) string {
 	return fmt.Sprintf("https://storage.cloud.google.com/%s/%s", nightlyDataBucket, nightlyTestHistoryObjectName(pVersion))
 }
 
+// nightlyTestUrl links to a single test's history page in the TeamCity nightly project, where the
+// reviewer can see every recent nightly run of that test. testNameId is TeamCity's internal
+// cross-build test identifier; it cannot be derived from the test name, so it is captured when the
+// nightly history is collected.
+func nightlyTestUrl(testNameId string, pVersion provider.Version) string {
+	if testNameId == "" {
+		return ""
+	}
+	return fmt.Sprintf("https://hashicorp.teamcity.com/test/%s?currentProjectId=%s", testNameId, pVersion.TeamCityNightlyProjectName())
+}
+
 // lookupNightlyHistory finds the history entry for a test name. The name may be a VCR
 // subtest name (Parent__sub); the parent test is used as a fallback.
 func lookupNightlyHistory(testName string, history map[string]*NightlyTestHistory) *NightlyTestHistory {

@@ -88,6 +88,8 @@ type VCRTestTableRow struct {
 	// NightlyEvidence summarizes the nightly runs backing NightlyStatus, linking each recent
 	// failure to its debug log.
 	NightlyEvidence string
+	// NightlyTestUrl links the test name to its nightly history page in TeamCity.
+	NightlyTestUrl string
 }
 
 type recordReplay struct {
@@ -871,6 +873,9 @@ func buildVCRTestRows(replayingResult, recordingResult, replayingAfterRecordingR
 		if nightlyHistory != nil {
 			row.NightlyStatus = classifyNightlyStatus(t, nightlyHistory)
 			row.NightlyEvidence = nightlyEvidence(t, nightlyHistory)
+			if h := lookupNightlyHistory(t, nightlyHistory); h != nil {
+				row.NightlyTestUrl = nightlyTestUrl(h.TestNameId, provider.Beta)
+			}
 		}
 		testRows = append(testRows, row)
 	}

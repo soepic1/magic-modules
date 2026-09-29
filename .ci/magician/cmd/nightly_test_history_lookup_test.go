@@ -159,10 +159,21 @@ func TestNightlyEvidence(t *testing.T) {
 	}
 }
 
+func TestNightlyTestUrl(t *testing.T) {
+	assert.Equal(t,
+		"https://hashicorp.teamcity.com/test/6946391424746324317?currentProjectId=TerraformProviders_GoogleCloud_GOOGLE_BETA_NIGHTLYTESTS",
+		nightlyTestUrl("6946391424746324317", provider.Beta))
+	assert.Equal(t,
+		"https://hashicorp.teamcity.com/test/123?currentProjectId=TerraformProviders_GoogleCloud_GOOGLE_NIGHTLYTESTS",
+		nightlyTestUrl("123", provider.GA))
+	// Histories collected before test ids were captured must not render a broken link.
+	assert.Equal(t, "", nightlyTestUrl("", provider.Beta))
+}
+
 func TestRecordReplayNightlyColumn(t *testing.T) {
 	data := recordReplay{
 		TestRows: []VCRTestTableRow{
-			{DisplayName: "TestAcc_a", RecordingStatus: "Failed", ReplayingAfterRecordingStatus: "-", NightlyStatus: NightlyStatusFailing, NightlyEvidence: "28/30 failed, latest 2: [2026-09-27](https://logs/a1.log), [2026-09-28](https://logs/a2.log)"},
+			{DisplayName: "TestAcc_a", RecordingStatus: "Failed", ReplayingAfterRecordingStatus: "-", NightlyStatus: NightlyStatusFailing, NightlyEvidence: "28/30 failed, latest 2: [2026-09-27](https://logs/a1.log), [2026-09-28](https://logs/a2.log)", NightlyTestUrl: "https://hashicorp.teamcity.com/test/99"},
 			{DisplayName: "TestAcc_b", RecordingStatus: "Failed", ReplayingAfterRecordingStatus: "-", NightlyStatus: NightlyStatusPassing},
 		},
 		RecordingResult:       vcr.Result{FailedTests: []string{"TestAcc_a", "TestAcc_b"}},
@@ -176,7 +187,7 @@ func TestRecordReplayNightlyColumn(t *testing.T) {
 	got, err := formatRecordReplay(data, new(strings.Builder))
 	assert.NoError(t, err)
 	assert.Contains(t, got, "| Recording Mode | Replaying Rerun | Nightly | Test Name |")
-	assert.Contains(t, got, "| ❌ | - | 🔴 Failing<br>28/30 failed, latest 2: [2026-09-27](https://logs/a1.log), [2026-09-28](https://logs/a2.log) | TestAcc_a |")
+	assert.Contains(t, got, "| ❌ | - | 🔴 Failing<br>28/30 failed, latest 2: [2026-09-27](https://logs/a1.log), [2026-09-28](https://logs/a2.log) | [TestAcc_a](https://hashicorp.teamcity.com/test/99) |")
 	assert.Contains(t, got, "| ❌ | - | 🟢 Passing | TestAcc_b |")
 	assert.Contains(t, got, "**Known Nightly Failures**: 1 of the tests")
 	assert.Contains(t, got, "[nightly test history](https://storage.cloud.google.com/nightly-test-data/nightly-test-history/beta/nightly-test-history.json)")
